@@ -14,7 +14,14 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('[Service Worker] Pre-caching Core App Shell');
-      return cache.addAll(ASSETS_TO_CACHE);
+      // Cache assets individually so that if one fails, it doesn't break the entire service worker install
+      return Promise.allSettled(
+        ASSETS_TO_CACHE.map((asset) => {
+          return cache.add(asset).catch((err) => {
+            console.warn(`[Service Worker] Failed to pre-cache asset: ${asset}`, err);
+          });
+        })
+      );
     }).then(() => {
       return self.skipWaiting();
     })

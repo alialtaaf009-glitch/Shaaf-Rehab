@@ -21,7 +21,7 @@ import {
   addLiveMedicationLog
 } from './lib/firebase';
 import PatientsTab from './components/PatientsTab';
-import AdmissionsTab from './components/AdmissionsTab';
+import AdmissionsTab from './lib/AdmissionsTab';
 import ProgressTab from './components/ProgressTab';
 import DispensaryTab from './components/DispensaryTab';
 import CompanionSimulator from './components/CompanionSimulator';
