@@ -11,6 +11,13 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // A user is authorized staff if a document exists at staff/{their uid}.
+    // Manage staff by adding/removing these documents — no redeploy needed.
+    function isAuthorizedStaff() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/staff/$(request.auth.uid));
+    }
+
     function isEmailVerified() {
       return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
     }
@@ -29,19 +36,28 @@ service cloud.firestore {
       return resource.data;
     }
 
+    // --- COLLECTION: staff (access allowlist) ---
+    // A signed-in user may read their OWN staff doc (needed to verify access).
+    // Writes are denied to all clients: add/remove staff from the Firebase
+    // console only. This prevents anyone from granting themselves access.
+    match /staff/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
     // --- COLLECTION: patients ---
     match /patients/{patientId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() 
+      allow read: if isAuthorizedStaff();
+      allow create: if isAuthorizedStaff() 
         && isValidId(patientId) 
         && isValidPatient(incoming())
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
-      allow update: if isSignedIn()
+      allow update: if isAuthorizedStaff()
         && isValidPatient(incoming())
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time;
-      allow delete: if isSignedIn(); // Allow managers to archive relative records
+      allow delete: if isAuthorizedStaff(); // Allow managers to archive relative records
     }
 
     function isValidPatient(data) {
@@ -60,16 +76,16 @@ service cloud.firestore {
 
     // --- SUBCOLLECTION: admissions ---
     match /patients/{patientId}/admissions/{admissionId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      allow read: if isAuthorizedStaff();
+      allow create: if isAuthorizedStaff()
         && isValidId(patientId)
         && isValidId(admissionId)
         && isValidAdmission(incoming())
         && incoming().createdAt == request.time;
-      allow update: if isSignedIn()
+      allow update: if isAuthorizedStaff()
         && isValidAdmission(incoming())
         && incoming().createdAt == existing().createdAt;
-      allow delete: if isSignedIn();
+      allow delete: if isAuthorizedStaff();
     }
 
     function isValidAdmission(data) {
@@ -86,18 +102,18 @@ service cloud.firestore {
 
     // --- SUBCOLLECTION: progress ---
     match /patients/{patientId}/progress/{progressId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      allow read: if isAuthorizedStaff();
+      allow create: if isAuthorizedStaff()
         && isValidId(patientId)
         && isValidId(progressId)
         && isValidProgress(incoming())
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
-      allow update: if isSignedIn()
+      allow update: if isAuthorizedStaff()
         && isValidProgress(incoming())
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time;
-      allow delete: if isSignedIn();
+      allow delete: if isAuthorizedStaff();
     }
 
     function isValidProgress(data) {
@@ -117,16 +133,16 @@ service cloud.firestore {
 
     // --- SUBCOLLECTION: medications ---
     match /patients/{patientId}/medications/{medicationId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      allow read: if isAuthorizedStaff();
+      allow create: if isAuthorizedStaff()
         && isValidId(patientId)
         && isValidId(medicationId)
         && isValidMedication(incoming())
         && incoming().createdAt == request.time;
-      allow update: if isSignedIn()
+      allow update: if isAuthorizedStaff()
         && isValidMedication(incoming())
         && incoming().createdAt == existing().createdAt;
-      allow delete: if isSignedIn();
+      allow delete: if isAuthorizedStaff();
     }
 
     function isValidMedication(data) {
@@ -145,14 +161,14 @@ service cloud.firestore {
 
     // --- SUBCOLLECTION: medicationLogs ---
     match /patients/{patientId}/medicationLogs/{logId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      allow read: if isAuthorizedStaff();
+      allow create: if isAuthorizedStaff()
         && isValidId(patientId)
         && isValidId(logId)
         && isValidMedicationLog(incoming());
-      allow update: if isSignedIn()
+      allow update: if isAuthorizedStaff()
         && isValidMedicationLog(incoming());
-      allow delete: if isSignedIn();
+      allow delete: if isAuthorizedStaff();
     }
 
     function isValidMedicationLog(data) {
