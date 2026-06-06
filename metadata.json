@@ -1,0 +1,6 @@
+{
+  "name": "Shaaf Rehab",
+  "description": "Clinical management system and patient companion portal for Shaaf Rehabilitation and Addiction Center, featuring digital intake for admissions/readmissions, interactive recovery timeline graphs, secure counselor assessment logs, and medication regimen tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

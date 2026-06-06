@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "patient": {
+      "title": "Patient",
+      "description": "Patient general record in the rehabilitation center",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "description": "Full name of the patient" },
+        "age": { "type": "integer" },
+        "gender": { "type": "string" },
+        "contact": { "type": "string" },
+        "emergencyContact": { "type": "string" },
+        "substance": { "type": "string", "description": "Primary substance use disorder or condition" },
+        "admissionDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "discharged", "readmitted"] },
+        "room": { "type": "string", "description": "Room and bed details" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "age", "gender", "status", "createdAt", "updatedAt"]
+    },
+    "admission": {
+      "title": "Admission",
+      "description": "Admission and readmission event logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "admissionDate": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["new", "readmission"] },
+        "triageNotes": { "type": "string" },
+        "detoxRequired": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["admitted", "completed", "discharged"] },
+        "signedConsent": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "patientId", "admissionDate", "type", "status", "signedConsent", "createdAt"]
+    },
+    "progress": {
+      "title": "Progress",
+      "description": "Daily sobriety tracking, vitals, counselor check-in notes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "date": { "type": "string" },
+        "sobrietyDay": { "type": "integer" },
+        "counselorNotes": { "type": "string" },
+        "heartRate": { "type": "integer" },
+        "bloodPressure": { "type": "string" },
+        "temperature": { "type": "number" },
+        "mood": { "type": "integer" },
+        "sleep": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "patientId", "date", "sobrietyDay", "counselorNotes", "mood", "sleep", "createdAt", "updatedAt"]
+    },
+    "medication": {
+      "title": "Medication",
+      "description": "Prescribed medication schedules for patients",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "medName": { "type": "string" },
+        "dosage": { "type": "string" },
+        "frequency": { "type": "string" },
+        "timeOfDay": { "type": "string", "enum": ["morning", "afternoon", "evening", "night"] },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "completed", "discontinued"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "patientId", "medName", "dosage", "frequency", "timeOfDay", "startDate", "status", "createdAt"]
+    },
+    "medicationLog": {
+      "title": "MedicationLog",
+      "description": "Tracks logs of when medications were administered",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "medicationId": { "type": "string" },
+        "date": { "type": "string" },
+        "administeredAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["taken", "missed", "pending"] },
+        "takenBy": { "type": "string" }
+      },
+      "required": ["id", "patientId", "medicationId", "date", "status"]
+    }
+  },
+  "firestore": {
+    "/patients/{patientId}": {
+      "schema": "patient",
+      "description": "Primary clinical records of patients"
+    },
+    "/patients/{patientId}/admissions/{admissionId}": {
+      "schema": "admission",
+      "description": "History of intake events and readmissions for a patient"
+    },
+    "/patients/{patientId}/progress/{progressId}": {
+      "schema": "progress",
+      "description": "Subcollection of daily sobriety logs and counselors notes for a patient"
+    },
+    "/patients/{patientId}/medications/{medicationId}": {
+      "schema": "medication",
+      "description": "Medication requirements for a patient"
+    },
+    "/patients/{patientId}/medicationLogs/{logId}": {
+      "schema": "medicationLog",
+      "description": "History of when medication doses were taken or missed"
+    }
+  }
+}

@@ -1,0 +1,170 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Auth helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Helper to extract incoming state
+    function incoming() {
+      return request.resource.data;
+    }
+
+    // Helper to extract existing state
+    function existing() {
+      return resource.data;
+    }
+
+    // --- COLLECTION: patients ---
+    match /patients/{patientId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() 
+        && isValidId(patientId) 
+        && isValidPatient(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidPatient(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isSignedIn(); // Allow managers to archive relative records
+    }
+
+    function isValidPatient(data) {
+      return data.keys().hasAll(['id', 'name', 'age', 'gender', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().size() <= 12
+        && data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.age is int && data.age >= 0 && data.age <= 120
+        && data.gender is string && data.gender.size() <= 20
+        && data.status in ['active', 'discharged', 'readmitted']
+        && (!data.keys().hasAny(['contact']) || data.contact is string)
+        && (!data.keys().hasAny(['emergencyContact']) || data.emergencyContact is string)
+        && (!data.keys().hasAny(['substance']) || data.substance is string)
+        && (!data.keys().hasAny(['room']) || data.room is string);
+    }
+
+    // --- SUBCOLLECTION: admissions ---
+    match /patients/{patientId}/admissions/{admissionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && isValidId(patientId)
+        && isValidId(admissionId)
+        && isValidAdmission(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if isSignedIn()
+        && isValidAdmission(incoming())
+        && incoming().createdAt == existing().createdAt;
+      allow delete: if isSignedIn();
+    }
+
+    function isValidAdmission(data) {
+      return data.keys().hasAll(['id', 'patientId', 'admissionDate', 'type', 'status', 'signedConsent', 'createdAt'])
+        && data.keys().size() <= 10
+        && data.id is string && data.id.size() <= 128
+        && data.patientId is string && data.patientId.size() <= 128
+        && data.type in ['new', 'readmission']
+        && data.status in ['admitted', 'completed', 'discharged']
+        && data.signedConsent is bool
+        && (!data.keys().hasAny(['triageNotes']) || data.triageNotes is string)
+        && (!data.keys().hasAny(['detoxRequired']) || data.detoxRequired is bool);
+    }
+
+    // --- SUBCOLLECTION: progress ---
+    match /patients/{patientId}/progress/{progressId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && isValidId(patientId)
+        && isValidId(progressId)
+        && isValidProgress(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidProgress(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isSignedIn();
+    }
+
+    function isValidProgress(data) {
+      return data.keys().hasAll(['id', 'patientId', 'date', 'sobrietyDay', 'counselorNotes', 'mood', 'sleep', 'createdAt', 'updatedAt'])
+        && data.keys().size() <= 14
+        && data.id is string && data.id.size() <= 128
+        && data.patientId is string && data.patientId.size() <= 128
+        && data.date is string && data.date.size() <= 20
+        && data.sobrietyDay is int && data.sobrietyDay >= 0
+        && data.counselorNotes is string && data.counselorNotes.size() <= 5000
+        && data.mood is int && data.mood >= 1 && data.mood <= 10
+        && (data.sleep is int || data.sleep is float)
+        && (!data.keys().hasAny(['heartRate']) || data.heartRate is int)
+        && (!data.keys().hasAny(['bloodPressure']) || data.bloodPressure is string)
+        && (!data.keys().hasAny(['temperature']) || data.temperature is int || data.temperature is float);
+    }
+
+    // --- SUBCOLLECTION: medications ---
+    match /patients/{patientId}/medications/{medicationId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && isValidId(patientId)
+        && isValidId(medicationId)
+        && isValidMedication(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if isSignedIn()
+        && isValidMedication(incoming())
+        && incoming().createdAt == existing().createdAt;
+      allow delete: if isSignedIn();
+    }
+
+    function isValidMedication(data) {
+      return data.keys().hasAll(['id', 'patientId', 'medName', 'dosage', 'frequency', 'timeOfDay', 'startDate', 'status', 'createdAt'])
+        && data.keys().size() <= 11
+        && data.id is string && data.id.size() <= 128
+        && data.patientId is string && data.patientId.size() <= 128
+        && data.medName is string && data.medName.size() > 0 && data.medName.size() <= 150
+        && data.dosage is string && data.dosage.size() <= 50
+        && data.frequency is string && data.frequency.size() <= 50
+        && data.timeOfDay in ['morning', 'afternoon', 'evening', 'night']
+        && data.startDate is string && data.startDate.size() <= 20
+        && data.status in ['active', 'completed', 'discontinued']
+        && (!data.keys().hasAny(['endDate']) || data.endDate is string);
+    }
+
+    // --- SUBCOLLECTION: medicationLogs ---
+    match /patients/{patientId}/medicationLogs/{logId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && isValidId(patientId)
+        && isValidId(logId)
+        && isValidMedicationLog(incoming());
+      allow update: if isSignedIn()
+        && isValidMedicationLog(incoming());
+      allow delete: if isSignedIn();
+    }
+
+    function isValidMedicationLog(data) {
+      return data.keys().hasAll(['id', 'patientId', 'medicationId', 'date', 'status'])
+        && data.keys().size() <= 8
+        && data.id is string && data.id.size() <= 128
+        && data.patientId is string && data.patientId.size() <= 128
+        && data.medicationId is string && data.medicationId.size() <= 128
+        && data.date is string && data.date.size() <= 20
+        && data.status in ['taken', 'missed', 'pending']
+        && (!data.keys().hasAny(['administeredAt']) || data.administeredAt is string)
+        && (!data.keys().hasAny(['takenBy']) || data.takenBy is string);
+    }
+  }
+}
