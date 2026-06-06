@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
-  Heart, Users, ClipboardList, Key, Settings, Sparkles, AlertCircle,
-  TrendingUp, Pill, LogIn, LogOut, CheckCircle, Smartphone, Home, Layers, Calendar
+  Heart, Users, ClipboardList, Settings, Sparkles, AlertCircle,
+  TrendingUp, Pill, LogIn, LogOut, CheckCircle, Home
 } from 'lucide-react';
 import { 
   Patient, Admission, ProgressLog, Medication, MedicationLog, 
@@ -11,6 +11,8 @@ import {
   offlineDb, 
   auth, 
   loginWithGoogle, 
+  completeRedirectLogin,
+  isStaffUser,
   logoutUser, 
   getLivePatients, 
   addLivePatient, 
@@ -24,11 +26,10 @@ import PatientsTab from './components/PatientsTab';
 import AdmissionsTab from './lib/AdmissionsTab';
 import ProgressTab from './components/ProgressTab';
 import DispensaryTab from './components/DispensaryTab';
-import CompanionSimulator from './components/CompanionSimulator';
 
 export default function App() {
   // Navigation
-  const [activeTab, setActiveTab] = useState<'overview' | 'patients' | 'admissions' | 'vitals' | 'dispensary' | 'companion'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'patients' | 'admissions' | 'vitals' | 'dispensary'>('overview');
   
   // App Core States
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -41,6 +42,7 @@ export default function App() {
   const [firebaseUser, setFirebaseUser] = useState<any>(null);
   const [isCloudSync, setIsCloudSync] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   // Load initial content from offline database fallback on boot
   useEffect(() => {
@@ -51,9 +53,22 @@ export default function App() {
     setMedications(offlineDb.getMedications());
     setMedicationLogs(offlineDb.getMedicationLogs());
 
+    // Complete any pending redirect-based sign-in (mobile / APK path)
+    completeRedirectLogin();
+
     // Listen to Firebase auth changes safely
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
+        // Enforce staff-only access: the user must have a staff/{uid} record.
+        const staff = await isStaffUser(user.uid);
+        if (!staff) {
+          setAccessDenied(true);
+          setFirebaseUser(null);
+          setIsCloudSync(false);
+          logoutUser();
+          return;
+        }
+        setAccessDenied(false);
         setFirebaseUser(user);
         setIsCloudSync(true);
         loadFirebaseData();
@@ -200,9 +215,10 @@ export default function App() {
   const handleAuthenticate = async () => {
     try {
       setLoading(true);
+      setAccessDenied(false);
       await loginWithGoogle();
     } catch (err) {
-      alert("Note: External popup login required workspace allowlists. Playing in Secure Local Sandbox Sandbox Mode instead!");
+      alert("Sign-in could not be completed. Please check your internet connection and that this device's account is authorized, then try again.");
     } finally {
       setLoading(false);
     }
@@ -221,16 +237,23 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col antialiased" id="clinic-root-view">
+
+      {accessDenied && (
+        <div className="bg-rose-600 text-white text-center text-xs font-sans font-semibold py-2 px-4" id="access-denied-banner">
+          This account is not registered as Shaaf Rehab staff. Please sign in with an authorized staff account, or ask an administrator to grant you access.
+        </div>
+      )}
       
       {/* 1. TOP HEADER NAVIGATION BAR */}
       <header className="bg-slate-900 text-white py-4 px-6 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 shadow-lg border-b border-slate-800 z-10" id="main-portal-header">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 bg-emerald-500 rounded-2xl flex items-center justify-center text-slate-950 font-black tracking-tighter" id="crest-shield">
-            SR
+          <div className="h-11 w-11 rounded-2xl overflow-hidden flex items-center justify-center shrink-0 bg-slate-800" id="crest-shield">
+            <img src="/app_logo.png" alt="Shaaf Rehab logo" className="h-full w-full object-cover" />
           </div>
           <div>
-            <h1 className="font-sans font-extrabold text-[#f1f5f9] tracking-tight text-base leading-none">Shaaf Rehabilitation and Addiction Center</h1>
-            <p className="text-[10px] text-emerald-400 font-sans tracking-widest font-bold uppercase mt-1">Clinical Inpatient & Counseling Portal</p>
+            <h1 className="font-sans font-extrabold text-[#f1f5f9] tracking-tight text-base leading-none">Shaaf Rehab</h1>
+            <p className="font-sans text-emerald-300 text-sm leading-tight mt-1" dir="rtl" lang="ur">شاف ری ہیب اینڈ ایڈکشن سینٹر</p>
+            <p className="text-[9px] text-slate-400 font-sans leading-tight mt-1">919 J2, Johar Town, Lahore &nbsp;•&nbsp; PHC# R-28998</p>
           </div>
         </div>
 
@@ -318,18 +341,6 @@ export default function App() {
             }`}
           >
             <Pill size={16} /> Dispensary Record
-          </button>
-
-          <div className="text-[9px] uppercase font-bold text-slate-400 font-sans tracking-widest px-3.5 mt-6 mb-2 block">Outpatient Aftercare</div>
-
-          <button
-            id="nav-companion"
-            onClick={() => setActiveTab('companion')}
-            className={`flex items-center gap-3 px-3.5 py-3 rounded-2xl text-xs font-sans font-bold transition duration-150 ${
-              activeTab === 'companion' ? 'bg-slate-900 text-white shadow-md hover:bg-slate-950' : 'text-emerald-700 hover:bg-emerald-50 bg-emerald-50/40 border border-emerald-100/50'
-            }`}
-          >
-            <Smartphone size={16} /> Aftercare Companion App
           </button>
 
           <div className="mt-auto pt-6 px-3.5" id="sidebar-footer">
@@ -457,15 +468,15 @@ export default function App() {
                     </button>
                   </div>
 
-                  <div className="bg-indigo-50 border border-indigo-100/50 p-6 rounded-3xl flex flex-col space-y-3" id="app-companion-features-card">
-                    <h3 className="font-sans font-bold text-indigo-950 text-sm">Outpatient Aftercare App Simulator</h3>
-                    <p className="text-xs text-indigo-700 font-sans leading-relaxed">Residents are restricted from smartphone usage during their active stay. Upon therapeutic discharge, patients receive this customized mobile app to prevent relapse, practice paces of breathing, log sobriety days, and dial SOS Counselor hotlines.</p>
+                  <div className="bg-indigo-50 border border-indigo-100/50 p-6 rounded-3xl flex flex-col space-y-3" id="facility-info-card">
+                    <h3 className="font-sans font-bold text-indigo-950 text-sm">Facility</h3>
+                    <p className="text-xs text-indigo-700 font-sans leading-relaxed">Shaaf Rehabilitation and Addiction Center<br/>919 J2, Johar Town, Lahore<br/>Punjab Healthcare Commission Reg. No. PHC# R-28998</p>
                     <button
-                      id="overview-to-companion-btn"
-                      onClick={() => setActiveTab('companion')}
+                      id="overview-to-patients-btn"
+                      onClick={() => setActiveTab('patients')}
                       className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-sans font-bold text-xs rounded-xl transition text-center shadow-xs"
                     >
-                      Test Aftercare App Simulator
+                      Go to Patient Directory
                     </button>
                   </div>
                 </div>
@@ -510,16 +521,6 @@ export default function App() {
               medications={medications}
               medicationLogs={medicationLogs}
               onAdministerMedication={handleAdministerMedication}
-            />
-          )}
-
-          {activeTab === 'companion' && (
-            <CompanionSimulator
-              patients={patients}
-              medications={medications}
-              progressLogs={progressLogs}
-              onAddProgressLog={handleAddProgressLog}
-              onUpdatePatient={handleUpdatePatient}
             />
           )}
 
